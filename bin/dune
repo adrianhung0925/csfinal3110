@@ -1,0 +1,4 @@
+(executable
+ (public_name csfinal3110)
+ (name main)
+ (libraries csfinal3110))
