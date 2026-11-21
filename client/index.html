@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Semester: A CS 3110 Boss Fight (client)</title>
+  <style>
+    body { background: #111; color: #eee; font-family: monospace; margin: 24px; }
+    canvas { background: #000; display: block; margin: 12px 0; }
+    #join-error { color: #f77; }
+    pre { background: #1c1c1c; padding: 8px; height: 180px; overflow: auto; }
+    button, input { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>Semester: client</h1>
+  <form>
+    <label>Username <input id="name" maxlength="32" autocomplete="off"></label>
+    <button id="join">Join</button>
+    <span id="join-error"></span>
+  </form>
+  <p>Standing: <span id="standing"></span> &middot; Held keys: <span id="held"></span></p>
+  <canvas id="arena"></canvas>
+  <p>
+    <button id="drop">Simulate being dropped (test)</button>
+    Offline preview only; the real arena is drawn by the renderer.
+  </p>
+  <pre id="log"></pre>
+  <script src="client.bc.js"></script>
+</body>
+</html>
