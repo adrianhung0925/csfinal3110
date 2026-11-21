@@ -1,13 +1,5 @@
-Will provide a function that takes in keystrokes and sends them to server (called from renderer)
+Functionality provided by the game engine (Adrian): the modules State, Shape, Pattern, and Scheduler.
 
-handle_keystrokes : player_input_direction -> unit
+Every function is pure: nothing is stored globally. Each function returns a new value, and the server loop keeps
+the current State.t and Scheduler.t in its own variables and passes them back in on the next tick.
 
-Will provide a function that takes in an IP address and port number (from renderer)
-first int is IP, second int is port number, string is client ID
-set_socket : int -> int -> string -> unit
-
-
-
-Will provide a function that gives the clientID
-returns the local client ID
-get_client_ID : () -> string

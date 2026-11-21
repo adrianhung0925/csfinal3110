@@ -1,2 +1,4 @@
 (library
  (name csfinal3110))
+
+(include_subdirs unqualified)
