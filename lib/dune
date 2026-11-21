@@ -1,4 +1,6 @@
 (library
- (name csfinal3110))
+ (name csfinal3110)
+ (libraries js_of_ocaml)
+ (preprocess (pps js_of_ocaml-ppx)))
 
 (include_subdirs unqualified)
