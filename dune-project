@@ -19,7 +19,7 @@
  (name csfinal3110)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml)
+ (depends ocaml threads)
  (tags
   ("add topics" "to describe" your project)))
 

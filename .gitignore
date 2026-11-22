@@ -34,3 +34,7 @@ setup.log
 
 # Local OPAM switch
 _opam/
+_build/.digest-db
+_build/.digest-db
+_build/trace.csexp
+_build/trace.csexp.old
