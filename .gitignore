@@ -41,3 +41,6 @@ _build/trace.csexp.old
 _build/trace.csexp.old
 _build/trace.csexp
 _build/.digest-db
+_build/.digest-db
+_build/trace.csexp
+_build/trace.csexp.old
