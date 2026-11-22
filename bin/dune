@@ -7,4 +7,4 @@
 (executable
  (name mainNetworkTest)
  (modules mainNetworkTest)
- (libraries networker))
+ (libraries networker unix))

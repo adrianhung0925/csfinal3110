@@ -1,5 +1,5 @@
-let start_client port =
-  let addr = Unix.ADDR_INET (Unix.inet_addr_loopback, port) in
+let start_client server_ip port =
+  let addr = Unix.ADDR_INET (server_ip, port) in
   let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   Unix.connect sock addr;
   Printf.printf "Connected to server on port %d\n%!" port;
