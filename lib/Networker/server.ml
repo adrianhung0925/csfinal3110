@@ -4,10 +4,15 @@ let send_message oc msg =
 
 let clients = ref []
 let clients_mutex = Mutex.create ()
+let authoritative_client = ref None
+let latest_state = ref None
 
 let with_clients_lock f =
   Mutex.lock clients_mutex;
   Fun.protect ~finally:(fun () -> Mutex.unlock clients_mutex) f
+
+let is_authoritative_client authority client_id =
+  authority = Some client_id
 
 let send_to_client client_id message =
   with_clients_lock (fun () ->
@@ -23,14 +28,38 @@ let register_client client_id oc =
   with_clients_lock (fun () ->
       if List.mem_assoc client_id !clients then false
       else (
-        clients := (client_id, oc) :: !clients;
+        clients := !clients @ [ (client_id, oc) ];
+        if !authoritative_client = None then
+          authoritative_client := Some client_id;
+        send_message oc "ID_ACCEPTED";
+        (match (!authoritative_client, !latest_state) with
+        | Some authority, Some state when authority <> client_id ->
+            send_message oc state
+        | _ -> ());
         true))
 
 let remove_client client_id =
   with_clients_lock (fun () ->
       clients := List.filter (fun (id, _) -> id <> client_id) !clients)
 
-let start_server port =
+let publish_state client_id state =
+  with_clients_lock (fun () ->
+      if is_authoritative_client !authoritative_client client_id then (
+        latest_state := Some state;
+        List.iter
+          (fun (recipient_id, oc) ->
+            if recipient_id <> client_id then send_message oc state)
+          !clients)
+      else
+        Printf.eprintf "Ignoring state from non-authoritative client %s\n%!"
+          client_id)
+
+let start_server_internal port run_in_background =
+  with_clients_lock (fun () ->
+      clients := [];
+      authoritative_client := None;
+      latest_state := None);
+
   (*ai generated boilerplate I don't fully understand: *)
   let addr = Unix.ADDR_INET (Unix.inet_addr_any, port) in
   let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
@@ -44,7 +73,7 @@ let start_server port =
     match input_line ic with
     | msg ->
         Printf.printf "Received from client %s: %s\n%!" client_id msg;
-        send_to_client client_id ("Echo from server: " ^ msg);
+        publish_state client_id msg;
         handle_messages client_id ic
     | exception End_of_file -> ()
   in
@@ -57,12 +86,13 @@ let start_server port =
       | exception End_of_file -> ()
       | "" -> send_message oc "ID_REJECTED: client ID cannot be empty"
       | id ->
+          client_id := Some id;
           if register_client id oc then (
-            client_id := Some id;
-            send_message oc "ID_ACCEPTED";
             Printf.printf "Client %s connected\n%!" id;
             handle_messages id ic)
-          else send_message oc "ID_REJECTED: client ID is already in use"
+          else (
+            client_id := None;
+            send_message oc "ID_REJECTED: client ID is already in use")
     in
     (try
        Fun.protect
@@ -93,4 +123,10 @@ let start_server port =
     ignore (Thread.create (fun () -> handle_client client_sock oc) ());
     accept_clients ()
   in
-  accept_clients ()
+  if run_in_background then
+    ignore (Thread.create (fun () -> accept_clients ()) ())
+  else accept_clients ()
+
+let start_server port = start_server_internal port false
+
+let start_server_background port = start_server_internal port true

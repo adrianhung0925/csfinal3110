@@ -30,8 +30,21 @@ let send_message msg =
           output_string oc (msg ^ "\n");
           flush oc)
 
+let parse_ipv4_address ip =
+  let address =
+    try Unix.inet_addr_of_string ip
+    with Failure _ ->
+      invalid_arg
+        (Printf.sprintf "Client.start_client: expected an IPv4 address, got %S"
+           ip)
+  in
+  if String.contains (Unix.string_of_inet_addr address) ':' then
+    invalid_arg
+      (Printf.sprintf "Client.start_client: IPv6 is not supported, got %S" ip);
+  address
+
 let start_client server_ip port client_id =
-  let addr = Unix.ADDR_INET (server_ip, port) in
+  let addr = Unix.ADDR_INET (parse_ipv4_address server_ip, port) in
   let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   Unix.connect sock addr;
 
