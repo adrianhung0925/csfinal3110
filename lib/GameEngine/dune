@@ -1,3 +1,6 @@
 (library
  (name gameengine)
- (wrapped false))
+ (wrapped false)
+ (libraries yojson)
+ (preprocess
+  (pps ppx_deriving_yojson)))

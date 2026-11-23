@@ -9,6 +9,7 @@ type t = {
   kills : int;
   leaderboard : State.student list;
 }
+[@@deriving yojson]
 
 let of_state ~viewer st =
   {
@@ -29,3 +30,11 @@ let me snap =
   | None -> None
   | Some id ->
       List.find_opt (fun (s : State.student) -> s.id = id) snap.students
+
+let to_string snap = Yojson.Safe.to_string (to_yojson snap)
+
+let of_string str =
+  match of_yojson (Yojson.Safe.from_string str) with
+  | Ok snap -> snap
+  | Error msg -> failwith ("Snapshot.of_string: " ^ msg)
+  | exception Yojson.Json_error msg -> failwith ("Snapshot.of_string: " ^ msg)

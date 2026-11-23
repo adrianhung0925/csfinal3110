@@ -8,6 +8,7 @@ type t =
       text : string;
       cell : float;
     }
+[@@deriving yojson]
 
 (******************************************************************************)
 (* The block font. Each glyph is 7 rows of 5 characters: '#' is a lit cell and

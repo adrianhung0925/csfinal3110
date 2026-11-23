@@ -19,7 +19,7 @@
  (name csfinal3110)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml threads)
+ (depends ocaml threads yojson ppx_deriving_yojson)
  (tags
   ("add topics" "to describe" your project)))
 
