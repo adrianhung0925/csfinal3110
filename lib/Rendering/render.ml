@@ -1,6 +1,4 @@
 open Js_of_ocaml
-open State
-open Shape
 let background_color = "#151923"
 let border_color = "#A8B9B0"
 let other_player_color = "#FFF0AC"
@@ -54,20 +52,16 @@ let draw_arena (config : State.config) =
     (num 100.)
     (num config.arena_w)
     (num config.arena_h)
-let draw_player size (s : State.student)  =
-  let x = 100. +. s.pos.x -. size /. 2. in
-  let y = 100. +. s.pos.y -. size /. 2. in
-
-  (* TODO: determine whether this is the local player *)
-  let fill_color = curr_player_color in
-  ctx##.fillStyle := Js.string fill_color;
-
-  ctx##fillRect
-    (num x)
-    (num y)
-    (num size)
-    (num size)
-
+let draw_player size (viewer:State.student_id option) (s : State.student)  =
+  if s.standing = State.Enrolled then begin
+    let x = 100. +. s.pos.x -. size /. 2. in
+    let y = 100. +. s.pos.y -. size /. 2. in
+    let fill_color =
+      if viewer = Some s.id then curr_player_color else other_player_color
+    in
+    ctx##.fillStyle := Js.string fill_color;
+    ctx##fillRect (num x) (num y) (num size) (num size)
+  end
 let draw_circle radius pos =
   let x = fst pos in
   let y = snd pos in 
@@ -125,11 +119,11 @@ let draw_bullet (bullet : State.bullet) =
   | Shape.Rect {w;h} -> draw_rectangle w h (x, y)
   | Shape.Text {text;cell} -> draw_text text cell (x,y)
 
-let render (state:State.t) = 
-  let config = State.config state in
+let render (snapshot:Snapshot.t) = 
+  let (config : State.config) = snapshot.config in
   draw_arena config;
   let size_student = config.student_size in
-  let students = State.students state in
+  let (students : State.student list) = snapshot.students in
 
-  List.iter (draw_player size_student) students;
-  List.iter draw_bullet (State.bullets state)
+  List.iter (draw_player size_student snapshot.viewer) students;
+  List.iter draw_bullet (snapshot.bullets)

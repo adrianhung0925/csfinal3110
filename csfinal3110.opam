@@ -15,6 +15,8 @@ depends: [
   "threads"
   "js_of_ocaml"
   "js_of_ocaml-ppx"
+  "yojson"
+  "ppx_deriving_yojson"
   "odoc" {with-doc}
 ]
 build: [

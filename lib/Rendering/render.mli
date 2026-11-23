@@ -1,4 +1,4 @@
-open State
+open Snapshot
 
 val render : t -> unit
 
