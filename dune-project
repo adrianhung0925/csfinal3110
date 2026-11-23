@@ -19,7 +19,7 @@
  (name csfinal3110)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml threads)
+ (depends ocaml threads js_of_ocaml js_of_ocaml-ppx)
  (tags
   ("add topics" "to describe" your project)))
 
