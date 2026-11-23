@@ -1,15 +1,9 @@
-; The browser client, compiled to JavaScript by js_of_ocaml.
-; `dune build` produces _build/default/client/client.bc.js next to a copy of
-; index.html; serve that folder and open index.html (see README).
+; The browser client page (Artyom), compiled to JavaScript by js_of_ocaml.
+; Build with `dune build`, then open client/index.html in a browser.
 
 (executable
  (name client)
  (modes js)
- (libraries csfinal3110 js_of_ocaml)
+ (libraries browserclient gameengine rendering js_of_ocaml)
  (preprocess
   (pps js_of_ocaml-ppx)))
-
-(rule
- (alias default)
- (deps index.html client.bc.js)
- (action (progn)))

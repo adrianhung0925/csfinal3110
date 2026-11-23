@@ -1,17 +1,21 @@
-(* The browser client (Artyom). It lets a player join with a username, turns
-   arrow-key events into [State.dir] with [Input], and sends each change to the
-   server as a [Client_msg] over a WebSocket.
+(* The browser client (Artyom).
 
-   Open index.html?server=ws://HOST:PORT to connect to a server. Without
-   [server], the client runs offline: messages are only logged, and a local
-   preview moves the player's square so the input path can be checked by hand.
+   A player types a username and joins. From then on, every arrow-key event goes
+   through Input, and each real change (a key starting or stopping being held)
+   is sent as one Client_msg.
 
-   TEMPORARY: the preview below copies State.step's movement rule and draws a
-   plain square. Both go away once the server sends snapshots: the client will
-   then hand each snapshot to Lucy's renderer instead. *)
+   Two modes: - Local (default): no server exists yet, so this page runs Armen's
+   Gameloop itself as a stand-in server for one student (id 1). Each message is
+   still turned into text and decoded again before Client_msg.to_event hands it
+   to Gameloop.handle, exactly as the server will. Every tick, the student's
+   snapshot is drawn with Lucy's Render.render, and the student's standing from
+   Snapshot.me decides whether the controls are on. Key "1" makes the Professor
+   launch the Assignments attack, so getting hit and dropped can be tried. -
+   Server: open index.html?server=ws://HOST:PORT and the client sends the same
+   text messages over a WebSocket. Snapshots from the server are only logged
+   until the snapshot text format is agreed. *)
 
 open Js_of_ocaml
-open Csfinal3110
 
 let doc = Dom_html.document
 
@@ -23,66 +27,122 @@ let element id =
     (fun () -> failwith ("index.html has no element #" ^ id))
 
 let cfg = State.default_config
+
+(* In local mode this browser is student 1, the id the server would assign to
+   the first player who joins. *)
+let me : State.student_id = 1
 let keys = ref Input.empty
 let standing : State.standing option ref = ref None
 let socket : WebSockets.webSocket Js.t option ref = ref None
-let preview = ref { State.x = cfg.arena_w /. 2.; State.y = cfg.arena_h /. 2. }
+let local : Gameloop.t option ref = ref None
 
 (** [set_text id s] replaces the text of element [id] with [s]. *)
 let set_text id s = (element id)##.textContent := Js.some (Js.string s)
 
-(** [log s] adds the line [s] to the top of the on-page log and the console. *)
+(** [log s] adds the line [s] to the top of the on-page log (keeping the latest
+    30 lines) and to the browser console. *)
 let log s =
   let pre = element "log" in
   let old = Js.Opt.case pre##.textContent (fun () -> "") Js.to_string in
-  let lines = String.split_on_char '\n' old in
-  let kept = List.filteri (fun i _ -> i < 30) lines in
+  let kept = List.filteri (fun i _ -> i < 29) (String.split_on_char '\n' old) in
   pre##.textContent := Js.some (Js.string (String.concat "\n" (s :: kept)));
   Console.console##log (Js.string s)
 
-(** [dir_label d] lists the keys held in [d], e.g. ["up right"]. *)
-let dir_label (d : State.dir) =
+(** [held_label keys] lists the arrow keys held in [keys], e.g. ["up right"]. *)
+let held_label keys =
+  let d = Input.to_dir keys in
   let names =
     List.filter_map
-      (fun (held, name) -> if held then Some name else None)
+      (fun (h, name) -> if h then Some name else None)
       [ (d.up, "up"); (d.down, "down"); (d.left, "left"); (d.right, "right") ]
   in
   if names = [] then "(none)" else String.concat " " names
 
-(** [show_status ()] updates the status lines from the client's state. *)
+(** [show_status ()] updates the status line from the client's state. *)
 let show_status () =
-  set_text "held" (dir_label (Input.to_dir !keys));
+  set_text "held" (held_label !keys);
   set_text "standing"
     (match !standing with
     | None -> "not joined"
-    | Some State.Enrolled -> "enrolled (controls on)"
-    | Some State.Dropped -> "dropped: spectating (controls off)")
+    | Some State.Enrolled -> "enrolled (arrow keys on)"
+    | Some State.Dropped -> "dropped: spectating (arrow keys off)")
 
-(** [send m] sends [m] to the server if connected, and logs it either way. *)
+(** [deliver_locally wire] does what the server will do when text [wire] arrives
+    from this student: decode it, attach the student's id, and hand the event to
+    [Gameloop.handle]. *)
+let deliver_locally wire =
+  match !local with
+  | None -> ()
+  | Some lp -> (
+      match Client_msg.of_string wire with
+      | Error e -> log ("stand-in server rejected " ^ wire ^ ": " ^ e)
+      | Ok m -> (
+          match Client_msg.to_event me m with
+          | Some ev -> local := Some (Gameloop.handle ev lp)
+          | None -> ()))
+
+(** [send m] sends message [m] as text: over the WebSocket in server mode, or to
+    the stand-in server in local mode. It logs the text either way. *)
 let send m =
-  let s = Client_msg.to_string m in
+  let wire = Client_msg.to_string m in
   match !socket with
-  | Some ws when ws##.readyState = WebSockets.OPEN ->
-      ws##send (Js.string s);
-      log ("sent: " ^ s)
-  | _ -> log ("offline, not sent: " ^ s)
+  | Some ws ->
+      if ws##.readyState = WebSockets.OPEN then begin
+        ws##send (Js.string wire);
+        log ("sent: " ^ wire)
+      end
+      else log ("not connected, not sent: " ^ wire)
+  | None ->
+      deliver_locally wire;
+      log ("sent: " ^ wire)
 
-(** [handle e] applies keyboard event [e]: while the player may move, it updates
-    the held keys and sends a [Move] if the direction changed. *)
+(** [handle e] applies keyboard event [e] while the player controls a square,
+    and sends one message per change. *)
 let handle e =
   if Input.can_move !standing then begin
-    let keys', change = Input.update e !keys in
+    let keys', changes = Input.update e !keys in
     keys := keys';
-    Option.iter (fun d -> send (Client_msg.Move d)) change;
+    List.iter (fun c -> send (Client_msg.of_change c)) changes;
     show_status ()
   end
 
-(** [stop_controls s] sets the standing to [s] and, if that removes the player's
-    controls, releases every key so the server stops moving them. *)
-let stop_controls s =
-  handle Input.Blur;
-  standing := Some s;
-  show_status ()
+(** [set_standing s] records the standing the server reports. When the player
+    loses their controls, every held key is released first, so the server stops
+    moving them. *)
+let set_standing s =
+  if s <> !standing then begin
+    if not (Input.can_move s) then handle Input.Blur;
+    standing := s;
+    (match s with
+    | Some State.Dropped -> log "you were dropped: now spectating"
+    | Some State.Enrolled -> log "enrolled: arrow keys move your square"
+    | None -> ());
+    show_status ()
+  end
+
+(** [show_snapshot snap] draws [snap] and updates the player's standing, GPA,
+    and the time left from it. *)
+let show_snapshot snap =
+  Rendering.Render.render snap;
+  let mine = Snapshot.me snap in
+  set_standing (Option.map (fun (s : State.student) -> s.standing) mine);
+  set_text "gpa"
+    (match mine with
+    | Some s -> Printf.sprintf "%.2f" s.gpa
+    | None -> "-");
+  set_text "time" (Printf.sprintf "%ds" (snap.Snapshot.ticks_left / 30))
+
+(** [tick ()] advances the stand-in server by one tick and shows this student's
+    snapshot. It does nothing in server mode or before joining. *)
+let tick () =
+  match !local with
+  | None -> ()
+  | Some lp -> (
+      let lp = Gameloop.tick lp in
+      local := Some lp;
+      match List.assoc_opt (Some me) (Gameloop.snapshots lp) with
+      | Some snap -> show_snapshot snap
+      | None -> ())
 
 (** [connect url name] opens a WebSocket to [url] and sends [Join name] once it
     is open. *)
@@ -94,11 +154,12 @@ let connect url name =
     Dom.handler (fun _ ->
         log "connected";
         send (Client_msg.Join name);
+        (* The server will report the standing in its snapshots; until that
+           format is agreed, assume the join succeeded. *)
+        set_standing (Some State.Enrolled);
         Js._true);
   ws##.onmessage :=
     Dom.handler (fun ev ->
-        (* The snapshot format is not agreed yet (Armen/Anthony), so for now the
-           client only shows what the server sent. *)
         log ("received: " ^ Js.to_string ev##.data);
         Js._true);
   ws##.onerror :=
@@ -108,116 +169,82 @@ let connect url name =
   ws##.onclose :=
     Dom.handler (fun _ ->
         log "connection closed";
+        set_standing None;
         Js._true)
 
-(** [join ()] reads the username box and joins the game. *)
+(** [join ()] reads the username box and joins the round, or explains why the
+    name is not allowed. *)
 let join () =
-  let box = Dom_html.CoerceTo.input (element "name") in
   let name =
-    Js.Opt.case box
+    Js.Opt.case
+      (Dom_html.CoerceTo.input (element "name"))
       (fun () -> "")
       (fun i -> String.trim (Js.to_string i##.value))
   in
-  if name = "" then set_text "join-error" "Please type a username."
+  if !standing <> None then set_text "join-error" "You have already joined."
+  else if name = "" then set_text "join-error" "Please type a username."
   else if String.length name > cfg.max_name_len then
     set_text "join-error"
       (Printf.sprintf "Usernames can be at most %d characters." cfg.max_name_len)
   else begin
     set_text "join-error" "";
-    (* Until the server confirms the join, assume we are enrolled so the
-       controls can be tried. *)
-    standing := Some State.Enrolled;
-    (match List.assoc_opt "server" Url.Current.arguments with
+    match List.assoc_opt "server" Url.Current.arguments with
     | Some url -> connect url name
     | None ->
-        log "no ?server=ws://HOST:PORT given: offline preview";
-        send (Client_msg.Join name));
-    show_status ()
-  end
-
-(** [preview_tick ()] moves the preview square one tick, the way [State.step] is
-    specified to: [speed] per held axis, opposite keys cancel, and the square
-    stays inside the arena. *)
-let preview_tick () =
-  if !socket = None && !standing = Some State.Enrolled then begin
-    let d = Input.to_dir !keys in
-    let axis neg pos = (if pos then 1. else 0.) -. if neg then 1. else 0. in
-    let half = cfg.student_size /. 2. in
-    let clamp lo hi v = Float.max lo (Float.min hi v) in
-    let p = !preview in
-    preview :=
-      {
-        x =
-          clamp half (cfg.arena_w -. half)
-            (p.x +. (cfg.speed *. axis d.left d.right));
-        y =
-          clamp half (cfg.arena_h -. half)
-            (p.y +. (cfg.speed *. axis d.up d.down));
-      }
-  end
-
-(** [draw ctx] draws the arena outline and the preview square. *)
-let draw ctx =
-  let f = Js.float in
-  ctx##clearRect (f 0.) (f 0.) (f cfg.arena_w) (f cfg.arena_h);
-  ctx##.strokeStyle := Js.string "#ffffff";
-  ctx##strokeRect (f 1.) (f 1.) (f (cfg.arena_w -. 2.)) (f (cfg.arena_h -. 2.));
-  if !standing <> None && !socket = None then begin
-    ctx##.fillStyle :=
-      Js.string
-        (if !standing = Some State.Dropped then "rgba(255,255,255,0.35)"
-         else "#ffffff");
-    let half = cfg.student_size /. 2. in
-    ctx##fillRect
-      (f (!preview.x -. half))
-      (f (!preview.y -. half))
-      (f cfg.student_size) (f cfg.student_size)
+        log ("local mode: joined as student 1, " ^ name);
+        local :=
+          Some (Gameloop.create cfg |> Gameloop.join me ~name |> Gameloop.start)
   end
 
 (** [key_name ev] is the [KeyboardEvent.key] of [ev], or [""] if missing. *)
 let key_name (ev : Dom_html.keyboardEvent Js.t) =
   Js.Optdef.case ev##.key (fun () -> "") Js.to_string
 
-(** [on_key make ev] handles keyboard event [ev] as [make (key_name ev)], and
-    stops the page from scrolling when an arrow key is used for movement. *)
-let on_key make ev =
-  let k = key_name ev in
-  handle (make k);
-  if Input.key_of_code k <> None && Input.can_move !standing then Js._false
-  else Js._true
+(** [is_arrow name] is whether [name] is an arrow key's browser name. *)
+let is_arrow name = Gameloop.key_of_string name <> None
+
+(** [typing ()] is whether the username box has the keyboard, so keys are left
+    to it. *)
+let typing () =
+  Js.Opt.case doc##.activeElement
+    (fun () -> false)
+    (fun el -> Js.to_string el##.id = "name")
 
 let () =
-  Dom_html.window##.onload :=
+  doc##.onkeydown :=
+    Dom_html.handler (fun ev ->
+        let k = key_name ev in
+        if typing () then Js._true
+        else if k = "1" && !local <> None then begin
+          local :=
+            Option.map
+              (Gameloop.handle (Gameloop.Launch Gameloop.Assignments))
+              !local;
+          log "Professor (local stand-in) launched Assignments";
+          Js._true
+        end
+        else begin
+          handle (Input.Key_down k);
+          (* Stop the arrow keys from scrolling the page while they move the
+             square. *)
+          if is_arrow k && Input.can_move !standing then Js._false else Js._true
+        end);
+  doc##.onkeyup :=
+    Dom_html.handler (fun ev ->
+        if not (typing ()) then handle (Input.Key_up (key_name ev));
+        Js._true);
+  Dom_html.window##.onblur :=
     Dom_html.handler (fun _ ->
-        let canvas =
-          Js.Opt.get
-            (Dom_html.CoerceTo.canvas (element "arena"))
-            (fun () -> failwith "#arena is not a canvas")
-        in
-        canvas##.width := int_of_float cfg.arena_w;
-        canvas##.height := int_of_float cfg.arena_h;
-        let ctx = canvas##getContext Dom_html._2d_ in
-        doc##.onkeydown := Dom_html.handler (on_key (fun k -> Input.Key_down k));
-        doc##.onkeyup := Dom_html.handler (on_key (fun k -> Input.Key_up k));
-        Dom_html.window##.onblur :=
-          Dom_html.handler (fun _ ->
-              handle Input.Blur;
-              Js._true);
-        (element "join")##.onclick
-        := Dom_html.handler (fun _ ->
-            join ();
-            Js._false);
-        (element "drop")##.onclick
-        := Dom_html.handler (fun _ ->
-            if !standing <> None then stop_controls State.Dropped;
-            Js._false);
-        let tick () =
-          preview_tick ();
-          draw ctx
-        in
-        ignore
-          (Dom_html.window##setInterval
-             (Js.wrap_callback tick)
-             (Js.float (1000. /. 30.)));
-        show_status ();
-        Js._true)
+        handle Input.Blur;
+        Js._true);
+  (element "join")##.onclick
+  := Dom_html.handler (fun _ ->
+      join ();
+      (* Give the keyboard back to the game after joining. *)
+      (element "name")##blur;
+      Js._false);
+  ignore
+    (Dom_html.window##setInterval
+       (Js.wrap_callback tick)
+       (Js.float (1000. /. 30.)));
+  show_status ()
