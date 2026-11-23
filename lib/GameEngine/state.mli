@@ -1,8 +1,9 @@
 (** The game state of one round and the rules that advance it one tick at a
     time.
 
-    A round has no winner. It ends when the semester timer runs out or when no
-    student is still playing, and its results are the number of students the
+    A round has no winner. It ends when the semester timer runs out or when
+    every student who joined has been dropped, and its results are the number
+    of students the
     Professor knocked out ([kills]) and a [leaderboard] of usernames ranked by
     final GPA and then by how long each student stayed in the course.
 
@@ -61,7 +62,10 @@ type student = {
   pos : vec;
       (** Center of the student's square. The whole square is always inside
           the arena. *)
-  gpa : float;  (** Between [0.0] and [start_gpa], inclusive. *)
+  gpa : float;
+      (** Between [0.0] and [start_gpa], inclusive. Rounded to two decimal
+          places after every hit, e.g. [3.7] rather than
+          [3.6999999999999997]. *)
   invuln : int;
       (** Number of upcoming ticks on which this student cannot be hit; [0]
           means the student can be hit on the next tick. Never negative. *)
@@ -96,11 +100,12 @@ type dir = {
 (** The arrow keys one student is currently holding. Holding two opposite keys
     (up and down, or left and right) cancels movement along that axis. *)
 
-(** The stage of the round. [Lobby]: students are registering with their
-    usernames; nothing moves, there are no bullets, and the timer does not
-    run. [Running]: the
-    semester is in progress. [Finished]: the timer ran out or no student is
-    [Enrolled] any more; nothing changes after this, and [kills] and
+(** The stage of the round. [Lobby]: the round has not started; students can
+    register, but nothing moves, there are no bullets, and the timer does not
+    run. A server that wants no lobby calls [start] right after [init].
+    [Running]: the semester is in progress, and students can still join.
+    [Finished]: the timer ran out, or at least one student joined and every
+    student is [Dropped]; nothing changes after this, and [kills] and
     [leaderboard] are the final results. *)
 type phase =
   | Lobby
@@ -130,18 +135,18 @@ val add_student : student_id -> name:string -> t -> t
     called [name], with leading and trailing spaces removed, at the center
     of the arena with [start_gpa], invulnerability [0], and [survived = 0]. For
     example, [add_student 3 ~name:"  adrian " st] adds student 3 named
-    ["adrian"]. Raises [Invalid_argument] if [st] is not in phase [Lobby] (no
-    new students once the semester has started; a student who reconnects
-    keeps their old [id] and is not added again), if [id] is already in [st],
-    or if
-    [name] is empty or longer than [max_name_len] after removing the
-    spaces. *)
+    ["adrian"]. Students can join in phase [Lobby] or [Running]; a student
+    who joins while the round is [Running] starts the same way and counts
+    [survived] from the tick after they join. A student who reconnects keeps
+    their old [id] and is not added again. Raises [Invalid_argument] if [st]
+    is in phase [Finished], if [id] is already in [st], or if [name] is empty
+    or longer than [max_name_len] after removing the spaces. *)
 
 val start : t -> t
 (** [start st] begins the semester: if [st] is in phase [Lobby], it is [st] in
-    phase [Running]. Otherwise it is [st] unchanged. A round started with no
-    students becomes [Finished] on its first tick, because no one is
-    [Enrolled]. *)
+    phase [Running]. Otherwise it is [st] unchanged. A round may start with no
+    students: it keeps [Running], with the timer counting down, until students
+    join. *)
 
 (** {1 Advancing one tick} *)
 
@@ -171,8 +176,9 @@ val step : t -> moves:(student_id * dir) list -> spawned:bullet list -> t
       [invuln_ticks]. A student whose GPA reaches [0.0] becomes [Dropped].
     + Add 1 to [survived] for every student still [Enrolled]. A student
       dropped on this tick does not get this tick.
-    + Decrease the ticks left by 1. If none are left, or no student is
-      [Enrolled], the phase becomes [Finished].
+    + Decrease the ticks left by 1. If none are left, or there is at least
+      one student and none of them is [Enrolled], the phase becomes
+      [Finished]. A round with no students at all keeps [Running].
 
     So after a hit on tick [T], the student is safe on ticks [T+1] through
     [T + invuln_ticks] and can be hit again on tick [T + invuln_ticks + 1].
