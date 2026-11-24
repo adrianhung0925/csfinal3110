@@ -1,4 +1,10 @@
 we will put our names here
+Authors:
+Lyudmila Kaneva ldk66
+Anthony Querbach aq63
+Adrian Hung ah2427
+Artyom Jhangiryan aj682
+Armen Amirbekian aaa462
 
 
 

@@ -1,17 +1,5 @@
 (executable
  (public_name csfinal3110)
- (name main)
- (modules main)
- (libraries csfinal3110))
-
-(executable
- (name mainNetworkTest)
- (modules mainNetworkTest)
+ (name server)
+ (modules server)
  (libraries networker gameengine unix))
-
-(executable
- (name browser_client_main)
- (modules browser_client_main)
- (modes js)
- (libraries networker_browser js_of_ocaml)
- (preprocess (pps js_of_ocaml-ppx)))

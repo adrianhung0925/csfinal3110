@@ -3,11 +3,9 @@ open Js_of_ocaml
 let connection : Networker_browser.Browser_client.t option ref = ref None
 
 let input_element id =
-  Option.get
-    (Dom_html.getElementById_coerce id Dom_html.CoerceTo.input)
+  Option.get (Dom_html.getElementById_coerce id Dom_html.CoerceTo.input)
 
-let status_element =
-  Dom_html.getElementById "connection-status"
+let status_element = Dom_html.getElementById "connection-status"
 
 let set_status message =
   status_element##.textContent := Js.Opt.return (Js.string message)
@@ -23,11 +21,11 @@ let send_input input =
   match !connection with
   | Some client
     when Networker_browser.Browser_client.status client
-         = Networker_browser.Browser_client.Connected ->
-      (try
-         Networker_browser.Browser_client.send client
-           (Input_message.to_string input)
-       with Invalid_argument error -> set_status error)
+         = Networker_browser.Browser_client.Connected -> (
+      try
+        Networker_browser.Browser_client.send client
+          (Input_message.to_string input)
+      with Invalid_argument error -> set_status error)
   | Some _ | None -> ()
 
 let connect () =
@@ -45,8 +43,7 @@ let connect () =
           (Networker_browser.Browser_client.connect ~url ~client_id
              ~on_status:(fun status -> set_status (status_to_string status))
              ~on_message:(fun message ->
-               try
-                 Rendering.Render.render (Snapshot.of_string message)
+               try Rendering.Render.render (Snapshot.of_string message)
                with Failure error ->
                  set_status ("Invalid game snapshot: " ^ error)));
       set_status "Connecting..."
@@ -81,4 +78,4 @@ let () =
       (match Gameloop.key_of_string (key_of ev) with
       | Some key -> send_input (Input_message.Key_up key)
       | None -> ());
-      Js._true);
+      Js._true)

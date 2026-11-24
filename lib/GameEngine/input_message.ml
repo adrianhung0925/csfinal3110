@@ -1,3 +1,5 @@
+(*these are used for encoding client pressed to the server and decoding*)
+
 type t =
   | Key_down of Gameloop.key
   | Key_up of Gameloop.key

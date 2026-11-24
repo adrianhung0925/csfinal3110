@@ -4,7 +4,10 @@ import { WebSocket, WebSocketServer } from "ws";
 
 function readPort(name, fallback) {
   const value = process.env[name];
-  if (value === undefined) return fallback;
+  if (value === undefined) {
+    if (fallback !== undefined) return fallback;
+    throw new Error(`${name} must be set to a port from 1 to 65535`);
+  }
 
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -16,7 +19,7 @@ function readPort(name, fallback) {
 const websocketHost = process.env.WS_HOST ?? "127.0.0.1";
 const websocketPort = readPort("WS_PORT", 9001);
 const tcpHost = process.env.TCP_HOST ?? "127.0.0.1";
-const tcpPort = readPort("TCP_PORT", 9000);
+const tcpPort = readPort("TCP_PORT");
 const maxPayload = 1024 * 1024;
 const websocketServer = new WebSocketServer({
   host: websocketHost,
