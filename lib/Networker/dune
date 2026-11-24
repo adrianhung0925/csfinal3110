@@ -2,3 +2,9 @@
  (name networker)
  (libraries unix threads)
  (modules custom_networker client server))
+
+(library
+ (name networker_browser)
+ (libraries js_of_ocaml)
+ (modules browser_client)
+ (preprocess (pps js_of_ocaml-ppx)))

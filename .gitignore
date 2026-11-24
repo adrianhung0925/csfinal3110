@@ -44,3 +44,4 @@ _build/.digest-db
 _build/.digest-db
 _build/trace.csexp
 _build/trace.csexp.old
+node_modules/

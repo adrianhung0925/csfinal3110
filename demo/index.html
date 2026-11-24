@@ -9,7 +9,17 @@
     </style>
   </head>
   <body>
-    <p>Arrow keys move your square. Space makes the Professor launch the A1 assignment. All movement and hits come from the game engine.</p>
+    <p>Connect to the host, then use the arrow keys to move. Space launches the A1 assignment.</p>
+    <label>
+      WebSocket URL
+      <input id="server-url" type="url" value="ws://127.0.0.1:9001" />
+    </label>
+    <label>
+      Client ID
+      <input id="client-id" type="text" value="student-1" />
+    </label>
+    <button id="connect-button" type="button">Connect</button>
+    <p id="connection-status">Not connected</p>
     <canvas id="game-canvas" width="800" height="600"></canvas>
     <script src="../_build/default/demo/demo.bc.js"></script>
   </body>
