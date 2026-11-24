@@ -1,10 +1,5 @@
 (executable
  (public_name csfinal3110)
- (name main)
- (modules main)
- (libraries csfinal3110))
-
-(executable
- (name mainNetworkTest)
- (modules mainNetworkTest)
- (libraries networker unix))
+ (name server)
+ (modules server)
+ (libraries networker gameengine unix))

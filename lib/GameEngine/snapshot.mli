@@ -30,6 +30,7 @@ type t = {
           [Finished], for the end-of-round screen; [[]] in every other phase, so
           it is not sent on every tick. *)
 }
+[@@deriving yojson]
 (** One player's view of the round after a tick. The Professor's cooldowns and
     energy are not here yet; they will be added once the scheduler that owns
     them exists. *)
@@ -47,3 +48,17 @@ val me : t -> State.student option
     [snap.students], or [None] (always [None] for the Professor). The client
     uses it to find its own GPA and to switch to the spectator view once
     [s.standing] is [Dropped]. *)
+
+(** {1 Sending a snapshot over the network} *)
+
+val to_string : t -> string
+(** [to_string snap] is [snap] written as one line of JSON, ready for the
+    networker to send. It never contains a newline, so it works with
+    [output_string oc (msg ^ "\n")] on one side and [input_line ic] on the
+    other. For example, a lobby snapshot starts like
+    [{"viewer":1,"config":{"arena_w":600.0,...},"phase":["Lobby"],...}]. *)
+
+val of_string : string -> t
+(** [of_string str] is the snapshot that [to_string] turned into [str], so
+    [of_string (to_string snap) = snap] for every [snap]. Raises [Failure] if
+    [str] is not valid JSON or does not describe a snapshot. *)

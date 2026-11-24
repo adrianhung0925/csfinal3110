@@ -1,6 +1,6 @@
-(* Tests for the browser client (Artyom): Input (browser key events to key
-   changes), Client_msg (the text messages sent to the server), and the whole
-   path from a browser key event to a student moving in Gameloop.
+(* Tests for the browser client's keyboard handling (Artyom): Input (browser key
+   events to key changes and messages), and the whole path from a browser key
+   event, through the text the browser sends, to a student moving in Gameloop.
 
    Every expected value was worked out by hand from the .mli specifications, not
    copied from the implementation's output. Positions follow state.mli: a
@@ -10,9 +10,15 @@
 
 open OUnit2
 
+let key_to_string = function
+  | Gameloop.Up -> "Up"
+  | Gameloop.Down -> "Down"
+  | Gameloop.Left -> "Left"
+  | Gameloop.Right -> "Right"
+
 let change_to_string = function
-  | Input.Pressed k -> "Pressed " ^ Client_msg.key_name k
-  | Input.Released k -> "Released " ^ Client_msg.key_name k
+  | Input.Pressed k -> "Pressed " ^ key_to_string k
+  | Input.Released k -> "Released " ^ key_to_string k
 
 let changes_to_string cs = String.concat "; " (List.map change_to_string cs)
 
@@ -92,83 +98,66 @@ let input_tests =
       assert_bool "not a student yet" (not (can_move None)) );
   ]
 
-let msg_printer = function
-  | Ok m -> "Ok " ^ Client_msg.to_string m
-  | Error e -> "Error " ^ e
-
-let encode_test name m expected =
-  name >:: fun _ ->
-  assert_equal ~printer:Fun.id expected (Client_msg.to_string m)
-
-let decode_ok name s expected =
-  name >:: fun _ ->
-  assert_equal ~printer:msg_printer (Ok expected) (Client_msg.of_string s)
-
-let decode_error name s =
-  name >:: fun _ ->
-  match Client_msg.of_string s with
-  | Ok m -> assert_failure ("expected an error, got " ^ Client_msg.to_string m)
-  | Error _ -> ()
-
 let all_keys = Gameloop.[ Up; Down; Left; Right ]
 
-let msg_tests =
-  let open Client_msg in
-  let open Gameloop in
+let message_tests =
   [
-    encode_test "join" (Join "lucy") "join lucy";
-    encode_test "join keeps inner spaces" (Join "big bear") "join big bear";
-    encode_test "press up" (Press Up) "down ArrowUp";
-    encode_test "release left" (Release Left) "up ArrowLeft";
-    encode_test "press right" (Press Right) "down ArrowRight";
-    encode_test "release down" (Release Down) "up ArrowDown";
-    decode_ok "decode join" "join armen" (Join "armen");
-    decode_ok "decode join trims spaces" "join   armen  " (Join "armen");
-    decode_ok "decode press" "down ArrowDown" (Press Down);
-    decode_ok "decode release" "up ArrowRight" (Release Right);
-    decode_error "empty string" "";
-    decode_error "no space" "down";
-    decode_error "unknown type" "jump ArrowUp";
-    decode_error "type is case sensitive" "DOWN ArrowUp";
-    decode_error "join with a blank name" "join    ";
-    decode_error "not an arrow key" "down a";
-    decode_error "key name is case sensitive" "down arrowup";
-    decode_error "extra space before key" "down  ArrowUp";
-    ( "key_name is the inverse of Gameloop.key_of_string" >:: fun _ ->
+    ( "a press becomes Key_down" >:: fun _ ->
       List.iter
-        (fun k -> assert_equal (Some k) (Gameloop.key_of_string (key_name k)))
+        (fun k ->
+          assert_equal (Input_message.Key_down k)
+            (Input.to_message (Input.Pressed k)))
         all_keys );
-    ( "every key message round-trips" >:: fun _ ->
+    ( "a release becomes Key_up" >:: fun _ ->
       List.iter
-        (fun m ->
-          assert_equal ~printer:msg_printer (Ok m) (of_string (to_string m)))
-        (List.concat_map (fun k -> [ Press k; Release k ]) all_keys) );
-    ( "of_change" >:: fun _ ->
-      assert_equal (Press Up) (of_change (Input.Pressed Up));
-      assert_equal (Release Left) (of_change (Input.Released Left)) );
-    ( "to_event adds the sender's id" >:: fun _ ->
-      assert_equal (Some (Key_down (7, Up))) (to_event 7 (Press Up));
-      assert_equal (Some (Key_up (2, Right))) (to_event 2 (Release Right));
-      assert_equal None (to_event 1 (Join "lucy")) );
+        (fun k ->
+          assert_equal (Input_message.Key_up k)
+            (Input.to_message (Input.Released k)))
+        all_keys );
+    ( "the text sent for holding up, then letting go" >:: fun _ ->
+      let _, changes =
+        run [ Input.Key_down "ArrowUp"; Input.Key_up "ArrowUp" ]
+      in
+      assert_equal ~printer:(String.concat ", ")
+        [ "KEY_DOWN:ArrowUp"; "KEY_UP:ArrowUp" ]
+        (List.map
+           (fun c -> Input_message.to_string (Input.to_message c))
+           changes) );
+    ( "every message the client sends can be decoded by the server" >:: fun _ ->
+      List.iter
+        (fun c ->
+          let m = Input.to_message c in
+          assert_equal (Some m)
+            (Input_message.of_string (Input_message.to_string m)))
+        (List.concat_map
+           (fun k -> [ Input.Pressed k; Input.Released k ])
+           all_keys) );
   ]
 
-(* End to end: what the browser reports for student [id] goes through Input, is
-   encoded and decoded as the server would receive it, becomes a Gameloop event,
-   and moves the student in the game state. *)
+(* Whole path: what the browser reports for student [id] goes through Input,
+   becomes the text the demo sends, is decoded the way bin/server.ml decodes it,
+   and moves the student in Gameloop. *)
+
+(** [server_receives id text lp] is what bin/server.ml does when [text] arrives
+    from the connection of student [id]: decode it with [Input_message] and hand
+    the matching event to [Gameloop.handle]. Fails the test if the server could
+    not decode it. *)
+let server_receives id text lp =
+  match Input_message.of_string text with
+  | Some (Input_message.Key_down k) ->
+      Gameloop.handle (Gameloop.Key_down (id, k)) lp
+  | Some (Input_message.Key_up k) ->
+      Gameloop.handle (Gameloop.Key_up (id, k)) lp
+  | Some Input_message.Launch_assignments ->
+      Gameloop.handle (Gameloop.Launch Gameloop.Assignments) lp
+  | None -> assert_failure ("the server could not decode " ^ text)
 
 (** [send id changes lp] is [lp] after the server receives, from student [id],
-    the message for each change in [changes]. Fails the test if the server
-    cannot decode a message the client sends. *)
+    the text the demo sends for each change in [changes]. *)
 let send id changes lp =
   List.fold_left
     (fun lp c ->
-      let wire = Client_msg.to_string (Client_msg.of_change c) in
-      match Client_msg.of_string wire with
-      | Error e -> assert_failure ("server could not decode " ^ wire ^ ": " ^ e)
-      | Ok m -> (
-          match Client_msg.to_event id m with
-          | Some ev -> Gameloop.handle ev lp
-          | None -> lp))
+      server_receives id (Input_message.to_string (Input.to_message c)) lp)
     lp changes
 
 (** [deliver id events lp] is [lp] after the server receives everything the
@@ -224,26 +213,14 @@ let end_to_end_tests =
     move_test "stops at the right wall" [ Key_down "ArrowRight" ] 100
       (592., 200.);
     move_test "stops at the top wall" [ Key_down "ArrowUp" ] 100 (300., 8.);
-    ( "a release the client never saw pressed sends nothing" >:: fun _ ->
-      let lp =
-        round ()
-        |> deliver 1 [ Key_down "ArrowRight" ]
-        |> ticks 2
-        |> deliver 1 [ Key_up "ArrowRight" ]
-        |> ticks 3
-      in
-      (* The second [deliver] starts from no keys held, so its Key_up is not a
-         change and sends nothing: the student keeps moving. This is why the
-         client keeps one Input.t for the whole session (next test). *)
-      assert_equal ~printer:pos_printer (320., 200.) (pos 1 lp) );
-    ( "releasing with the client's real key state stops the student" >:: fun _ ->
+    ( "releasing stops the student" >:: fun _ ->
       let keys, pressed = run [ Key_down "ArrowRight" ] in
       let _, released = Input.update (Key_up "ArrowRight") keys in
       let lp =
         round () |> send 1 pressed |> ticks 2 |> send 1 released |> ticks 3
       in
       assert_equal ~printer:pos_printer (308., 200.) (pos 1 lp) );
-    ( "blur stops the student" >:: fun _ ->
+    ( "switching tabs (blur) stops the student" >:: fun _ ->
       let keys, pressed = run [ Key_down "ArrowDown"; Key_down "ArrowLeft" ] in
       let _, released = Input.update Blur keys in
       let lp =
@@ -266,6 +243,6 @@ let () =
     ("client"
     >::: [
            "input" >::: input_tests;
-           "msg" >::: msg_tests;
+           "message" >::: message_tests;
            "end_to_end" >::: end_to_end_tests;
          ])

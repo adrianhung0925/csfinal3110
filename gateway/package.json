@@ -1,0 +1,14 @@
+{
+  "name": "csfinal3110-websocket-gateway",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node gateway.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

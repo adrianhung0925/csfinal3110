@@ -52,6 +52,11 @@ let update e keys =
       | Some k when held k keys -> (set k false keys, [ Released k ])
       | _ -> (keys, []))
 
+(** [to_message c] is the message that tells the server about [c]. *)
+let to_message = function
+  | Pressed k -> Input_message.Key_down k
+  | Released k -> Input_message.Key_up k
+
 (** [can_move standing] is whether a player with [standing] controls a square.
 *)
 let can_move = function

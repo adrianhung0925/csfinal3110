@@ -3,9 +3,11 @@
     The browser reports the keyboard one event at a time: a key goes down
     (repeatedly, while it is held), a key comes up, or the page loses focus.
     This module keeps track of which arrow keys are held and reports each real
-    change as a [change], which the client sends to the server as a
-    [Client_msg]. Auto-repeated presses of a key that is already held are not
-    changes, so they are never sent.
+    change as a [change], which the browser client (demo/demo.ml) sends to the
+    server as an [Input_message] (see [to_message]). Auto-repeated presses of a
+    key that is already held are not changes, so they are never sent, and losing
+    focus releases every held key, so a student never keeps moving after the
+    player switches tabs.
 
     Arrow keys are [Gameloop.key] and are named as in [Gameloop.key_of_string],
     so the client and the server agree on them by construction.
@@ -58,6 +60,11 @@ val update : event -> t -> t * change list
 
     For example, [update (Key_down "ArrowUp") empty] holds only [Up] and gives
     [[Pressed Up]], and pressing ["ArrowUp"] again gives [[]]. *)
+
+val to_message : change -> Input_message.t
+(** [to_message c] is the message that tells the server about [c]:
+    [Input_message.Key_down k] for [Pressed k] and [Input_message.Key_up k] for
+    [Released k]. *)
 
 val can_move : State.standing option -> bool
 (** [can_move standing] is whether a player with [standing] controls a square:

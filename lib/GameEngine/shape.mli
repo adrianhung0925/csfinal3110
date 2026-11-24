@@ -1,9 +1,9 @@
 (** The shape of a bullet, and whether a student's square overlaps it.
 
     Shapes are plain data, so the server can send them to the browser and the
-    renderer can draw each kind its own way. A shape has no position of its
-    own: it is always placed at a bullet's center, and every function here
-    works relative to that center. All shapes are axis-aligned (no rotation).
+    renderer can draw each kind its own way. A shape has no position of its own:
+    it is always placed at a bullet's center, and every function here works
+    relative to that center. All shapes are axis-aligned (no rotation).
 
     This module is pure and depends on no other game module, so [State],
     [Pattern], and the renderer can all use it. *)
@@ -14,8 +14,8 @@
     - [Circle { radius }]: a filled circle.
     - [Rect { w; h }]: a filled rectangle [w] wide and [h] tall.
     - [Text { text; cell }]: [text] drawn in the built-in block font, where each
-      lit pixel of the font is a square of side [cell]. Only the lit cells
-      hurt: the gaps inside and between letters are safe. For example,
+      lit pixel of the font is a square of side [cell]. Only the lit cells hurt:
+      the gaps inside and between letters are safe. For example,
       [Text { text = "A1"; cell = 12. }] is 11 cells (132 units) wide and 7
       cells (84 units) tall.
 
@@ -30,6 +30,7 @@ type t =
       text : string;
       cell : float;
     }
+[@@deriving yojson]
 
 (** {1 Geometry} *)
 
@@ -42,11 +43,11 @@ val half_extents : t -> float * float
 
 val hits_square : t -> dx:float -> dy:float -> half:float -> bool
 (** [hits_square s ~dx ~dy ~half] is whether [s], centered at the origin,
-    overlaps or touches the square of half-side [half] centered at
-    [(dx, dy)]. In the game, [(dx, dy)] is the student's center minus the
-    bullet's center, and [half] is half of [student_size]. Touching edges count
-    as a hit. For example, with [half = 8.], [Circle { radius = 5. }] hits at
-    [(13., 0.)] (the edges touch) but not at [(14., 0.)]. *)
+    overlaps or touches the square of half-side [half] centered at [(dx, dy)].
+    In the game, [(dx, dy)] is the student's center minus the bullet's center,
+    and [half] is half of [student_size]. Touching edges count as a hit. For
+    example, with [half = 8.], [Circle { radius = 5. }] hits at [(13., 0.)] (the
+    edges touch) but not at [(14., 0.)]. *)
 
 (** {1 The block font}
 

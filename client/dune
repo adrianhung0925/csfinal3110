@@ -1,9 +1,0 @@
-; The browser client page (Artyom), compiled to JavaScript by js_of_ocaml.
-; Build with `dune build`, then open client/index.html in a browser.
-
-(executable
- (name client)
- (modes js)
- (libraries browserclient gameengine rendering js_of_ocaml)
- (preprocess
-  (pps js_of_ocaml-ppx)))
