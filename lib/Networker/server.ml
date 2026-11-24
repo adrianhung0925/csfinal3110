@@ -4,21 +4,47 @@ let send_message oc msg =
 
 let clients = ref []
 let clients_mutex = Mutex.create ()
-let authoritative_client = ref None
-let latest_state = ref None
+type event =
+  | Client_connected of string
+  | Client_message of string * string
+  | Client_disconnected of string
+
+let events = Queue.create ()
+let events_mutex = Mutex.create ()
 
 let with_clients_lock f =
   Mutex.lock clients_mutex;
   Fun.protect ~finally:(fun () -> Mutex.unlock clients_mutex) f
 
-let is_authoritative_client authority client_id =
-  authority = Some client_id
+let with_events_lock f =
+  Mutex.lock events_mutex;
+  Fun.protect ~finally:(fun () -> Mutex.unlock events_mutex) f
+
+let enqueue_event event = with_events_lock (fun () -> Queue.add event events)
+
+let take_events () =
+  with_events_lock (fun () ->
+      let rec drain pending =
+        if Queue.is_empty events then List.rev pending
+        else drain (Queue.take events :: pending)
+      in
+      drain [])
+
+let clear_events () = with_events_lock (fun () -> Queue.clear events)
 
 let send_to_client client_id message =
   with_clients_lock (fun () ->
       match List.assoc_opt client_id !clients with
       | Some oc -> send_message oc message
       | None -> failwith ("No connected client with ID " ^ client_id))
+
+let send_to_client_if_connected client_id message =
+  with_clients_lock (fun () ->
+      match List.assoc_opt client_id !clients with
+      | Some oc ->
+          send_message oc message;
+          true
+      | None -> false)
 
 let broadcast message =
   with_clients_lock (fun () ->
@@ -29,36 +55,23 @@ let register_client client_id oc =
       if List.mem_assoc client_id !clients then false
       else (
         clients := !clients @ [ (client_id, oc) ];
-        if !authoritative_client = None then
-          authoritative_client := Some client_id;
         send_message oc "ID_ACCEPTED";
-        (match (!authoritative_client, !latest_state) with
-        | Some authority, Some state when authority <> client_id ->
-            send_message oc state
-        | _ -> ());
+        enqueue_event (Client_connected client_id);
         true))
 
 let remove_client client_id =
-  with_clients_lock (fun () ->
-      clients := List.filter (fun (id, _) -> id <> client_id) !clients)
-
-let publish_state client_id state =
-  with_clients_lock (fun () ->
-      if is_authoritative_client !authoritative_client client_id then (
-        latest_state := Some state;
-        List.iter
-          (fun (recipient_id, oc) ->
-            if recipient_id <> client_id then send_message oc state)
-          !clients)
-      else
-        Printf.eprintf "Ignoring state from non-authoritative client %s\n%!"
-          client_id)
+  let was_connected =
+    with_clients_lock (fun () ->
+        let was_connected = List.mem_assoc client_id !clients in
+        clients := List.filter (fun (id, _) -> id <> client_id) !clients;
+        was_connected)
+  in
+  if was_connected then enqueue_event (Client_disconnected client_id)
 
 let start_server_internal port run_in_background =
   with_clients_lock (fun () ->
-      clients := [];
-      authoritative_client := None;
-      latest_state := None);
+      clients := []);
+  clear_events ();
 
   (*ai generated boilerplate I don't fully understand: *)
   let addr = Unix.ADDR_INET (Unix.inet_addr_any, port) in
@@ -73,7 +86,7 @@ let start_server_internal port run_in_background =
     match input_line ic with
     | msg ->
         Printf.printf "Received from client %s: %s\n%!" client_id msg;
-        publish_state client_id msg;
+        enqueue_event (Client_message (client_id, msg));
         handle_messages client_id ic
     | exception End_of_file -> ()
   in

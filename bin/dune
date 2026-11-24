@@ -7,7 +7,7 @@
 (executable
  (name mainNetworkTest)
  (modules mainNetworkTest)
- (libraries networker unix))
+ (libraries networker gameengine unix))
 
 (executable
  (name browser_client_main)
