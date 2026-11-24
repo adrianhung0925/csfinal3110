@@ -6,4 +6,10 @@ open OUnit2
 let () =
   run_test_tt_main
     ("csfinal3110"
-    >::: [ Test_shape.tests; Test_state.tests; Test_input_message.tests ])
+    >::: [
+           Test_shape.tests;
+           Test_state.tests;
+           Test_input_message.tests;
+           Test_gameloop.tests;
+           Test_snapshot.tests;
+         ])
