@@ -1,0 +1,7 @@
+; Browser client logic (Artyom): keyboard input and the messages a client sends
+; to the server. Pure OCaml with no browser dependency, so dune test can check it.
+
+(library
+ (name browserclient)
+ (wrapped false)
+ (libraries gameengine))

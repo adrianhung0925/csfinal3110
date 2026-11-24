@@ -1,5 +1,5 @@
 (executable
  (name demo)
  (modes js)
- (libraries rendering gameengine networker_browser js_of_ocaml)
+ (libraries rendering gameengine browserclient networker_browser js_of_ocaml)
  (preprocess (pps js_of_ocaml-ppx)))
