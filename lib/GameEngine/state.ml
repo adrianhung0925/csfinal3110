@@ -2,8 +2,9 @@ type vec = {
   x : float;
   y : float;
 }
+[@@deriving yojson]
 
-type student_id = int
+type student_id = int [@@deriving yojson]
 
 type config = {
   arena_w : float;
@@ -15,10 +16,12 @@ type config = {
   semester_ticks : int;
   max_name_len : int;
 }
+[@@deriving yojson]
 
 type standing =
   | Enrolled
   | Dropped
+[@@deriving yojson]
 
 type student = {
   id : student_id;
@@ -29,6 +32,7 @@ type student = {
   survived : int;
   standing : standing;
 }
+[@@deriving yojson]
 
 type bullet = {
   center : vec;
@@ -36,6 +40,7 @@ type bullet = {
   shape : Shape.t;
   damage : float;
 }
+[@@deriving yojson]
 
 type dir = {
   up : bool;
@@ -43,11 +48,13 @@ type dir = {
   left : bool;
   right : bool;
 }
+[@@deriving yojson]
 
 type phase =
   | Lobby
   | Running
   | Finished
+[@@deriving yojson]
 
 type t = {
   config : config;
