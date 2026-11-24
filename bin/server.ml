@@ -87,7 +87,7 @@ let run_game_server port =
       asynchronous with game logic. *)
     game_state := Gameloop.tick !game_state;
 
-    (*why does each player get their own snapshot?*)
+    (*TODO: restructure clients getting their own snapshots*)
     let snapshots = Gameloop.snapshots !game_state in
     Hashtbl.iter
       (fun client_id () ->

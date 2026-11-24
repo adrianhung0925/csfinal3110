@@ -4,6 +4,7 @@ let send_message oc msg =
 
 let clients = ref []
 let clients_mutex = Mutex.create ()
+
 type event =
   | Client_connected of string
   | Client_message of string * string
@@ -69,11 +70,8 @@ let remove_client client_id =
   if was_connected then enqueue_event (Client_disconnected client_id)
 
 let start_server_internal port run_in_background =
-  with_clients_lock (fun () ->
-      clients := []);
+  with_clients_lock (fun () -> clients := []);
   clear_events ();
-
-  (*ai generated boilerplate I don't fully understand: *)
   let addr = Unix.ADDR_INET (Unix.inet_addr_any, port) in
   let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   (* Allow quick restart of the server on the same port *)
@@ -141,5 +139,4 @@ let start_server_internal port run_in_background =
   else accept_clients ()
 
 let start_server port = start_server_internal port false
-
 let start_server_background port = start_server_internal port true
