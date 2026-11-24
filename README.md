@@ -12,8 +12,21 @@ computer, start the game server:
 dune exec bin/mainNetworkTest.exe -- server
 ```
 
-In another terminal on the host, install gateway dependencies once and start
-the gateway bound to the host's network interfaces:
+The gateway requires Node.js 18 or newer, which includes `npm`. Check that both
+commands are available before continuing:
+
+```sh
+node --version
+npm --version
+```
+
+If `npm` is not found, install Node.js 18+ (for example, with
+`brew install node` on macOS, or from the official Node.js download page), then
+open a new terminal.
+
+In another terminal on the host, install gateway dependencies once, then start
+the gateway bound to the host's network interfaces. These are two separate
+commands; `WS_HOST` applies to `npm start`, not `npm install`:
 
 ```sh
 # Terminal 2
@@ -22,16 +35,13 @@ npm install
 WS_HOST=0.0.0.0 npm start
 ```
 
-From the repository root, serve the demo page on the LAN:
-
-```sh
-python3 -m http.server 8000 --bind 0.0.0.0
-```
-
-Build the browser game bundle:
+In a third terminal, return to the repository root (the directory containing
+this `README.md`; do not serve from `gateway/`), build the browser bundle, then
+serve the repository on the LAN:
 
 ```sh
 dune build demo/demo.bc.js
+python3 -m http.server 8000 --bind 0.0.0.0 --directory .
 ```
 
 Each device can open `http://<host-LAN-IP>:8000/demo/index.html`, enter
